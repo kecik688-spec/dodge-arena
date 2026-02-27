@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569" id="ogp-key-meta" />
+<meta charset="UTF-8">
+<title>Dodge Arena: Double or Die</title>
+
+<!-- ✅ Play.fun SDK -->
+<script src="https://play.fun/sdk.js"></script>
+
+<style>
+body { margin:0; overflow:hidden; background:#0f0f0f; color:white; font-family:Arial }
+#score { position:absolute; top:10px; left:10px; font-size:20px }
+#leaderboard { position:absolute; right:10px; top:10px; font-size:14px }
+#panel {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  display:none; text-align:center;
+}
+button {
+  padding:12px 25px;
+  font-size:18px;
+  margin:8px;
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div id="score">Score: 0</div>
+<div id="leaderboard"></div>
+
+<div id="panel">
+  <h1>Game Over</h1>
+  <p id="finalScore"></p>
+
+  <button onclick="cashOut()">💰 Cash Out</button><br>
+
+  <button onclick="risk(2,0.7)">🔥 x2 (70%)</button>
+  <button onclick="risk(4,0.45)">🔥 x4 (45%)</button>
+  <button onclick="risk(8,0.25)">🔥 x8 (25%)</button><br>
+
+  <button onclick="watchAdContinue()">📺 Continue</button><br>
+  <button onclick="restart()">Play Again</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const PF = window.PlayFun || null;
+if (PF) PF.startGame();
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let player = { x: canvas.width/2 - 20, y: canvas.height - 60, w:40, h:40 };
+let blocks = [];
+let score = 0;
+let gameRunning = true;
+let speedMultiplier = 1;
+
+document.addEventListener("mousemove", e => {
+  player.x = e.clientX - player.w/2;
+});
+
+function spawnBlock(){
+  blocks.push({
+    x: Math.random() * (canvas.width - 30),
+    y: -30,
+    w:30,
+    h:30,
+    speed: (3 + score/20) * speedMultiplier
+  });
+}
+
+function update(){
+  if(!gameRunning) return;
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle="lime";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+
+  ctx.fillStyle="red";
+  blocks.forEach((b,i)=>{
+    b.y += b.speed;
+    ctx.fillRect(b.x,b.y,b.w,b.h);
+
+    if(
+      b.x < player.x + player.w &&
+      b.x + b.w > player.x &&
+      b.y < player.y + player.h &&
+      b.y + b.h > player.y
+    ){
+      endGame();
+    }
+
+    if(b.y > canvas.height){
+      blocks.splice(i,1);
+      score++;
+      document.getElementById("score").innerText="Score: "+score;
+      speedMultiplier = 1 + score * 0.03;
+    }
+  });
+
+  requestAnimationFrame(update);
+}
+
+function endGame(){
+  gameRunning=false;
+  document.getElementById("panel").style.display="block";
+  document.getElementById("finalScore").innerText="Your Score: "+score;
+}
+
+function cashOut(){
+  if(PF){
+    PF.addPoints(score);
+    PF.endGame();
+  }
+  restart();
+}
+
+function risk(multiplier, chance){
+  if(Math.random() < chance){
+    score *= multiplier;
+    alert("🔥 SUCCESS x"+multiplier);
+    if(PF){
+      PF.addPoints(score);
+      PF.endGame();
+    }
+  } else {
+    alert("💀 FAILED");
+  }
+  restart();
+}
+
+function watchAdContinue(){
+  if(!PF) return;
+  PF.showRewardedAd(()=>{
+    gameRunning = true;
+    blocks = [];
+    document.getElementById("panel").style.display="none";
+    update();
+  });
+}
+
+function restart(){
+  blocks=[];
+  score=0;
+  speedMultiplier=1;
+  gameRunning=true;
+  document.getElementById("score").innerText="Score: 0";
+  document.getElementById("panel").style.display="none";
+  update();
+}
+
+setInterval(spawnBlock,800);
+update();
+</script>
+
+</body>
+</html>
