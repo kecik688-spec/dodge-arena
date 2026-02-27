@@ -1,118 +1,182 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569" id="ogp-key-meta" />
 <meta charset="UTF-8">
+
+<!-- ✅ Claim Ownership -->
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569" id="ogp-key-meta" />
+
 <title>Dodge Arena: Double or Die</title>
 
 <!-- ✅ Play.fun SDK -->
 <script src="https://play.fun/sdk.js"></script>
 
 <style>
-body { margin:0; overflow:hidden; background:#0f0f0f; color:white; font-family:Arial }
+body {
+  margin:0;
+  overflow:hidden;
+  background:#0f0f0f;
+  color:#fff;
+  font-family:Arial;
+}
 #score { position:absolute; top:10px; left:10px; font-size:20px }
-#leaderboard { position:absolute; right:10px; top:10px; font-size:14px }
+#best { position:absolute; top:40px; left:10px; font-size:14px; opacity:.7 }
+
 #panel {
-  position:absolute; top:50%; left:50%;
+  position:absolute;
+  top:50%; left:50%;
   transform:translate(-50%,-50%);
-  display:none; text-align:center;
+  background:#111;
+  padding:20px;
+  text-align:center;
+  display:none;
+  border-radius:12px;
 }
 button {
-  padding:12px 25px;
-  font-size:18px;
-  margin:8px;
+  padding:14px 26px;
+  margin:6px;
+  font-size:16px;
   cursor:pointer;
+  border:none;
+  border-radius:8px;
 }
+.continue { background:#2ecc71; color:#000 }
+.risk { background:#e67e22 }
+.cash { background:#3498db }
 </style>
 </head>
 
 <body>
 
 <div id="score">Score: 0</div>
-<div id="leaderboard"></div>
+<div id="best">Best: 0</div>
 
 <div id="panel">
-  <h1>Game Over</h1>
-  <p id="finalScore"></p>
+  <h2>Game Over</h2>
+  <p id="final"></p>
 
-  <button onclick="cashOut()">💰 Cash Out</button><br>
+  <!-- 💰 деньги -->
+  <button class="continue" onclick="watchAd()">📺 Continue</button><br>
 
-  <button onclick="risk(2,0.7)">🔥 x2 (70%)</button>
-  <button onclick="risk(4,0.45)">🔥 x4 (45%)</button>
-  <button onclick="risk(8,0.25)">🔥 x8 (25%)</button><br>
+  <!-- 🔥 аддиктивность -->
+  <button class="risk" onclick="risk(2,0.7)">x2 (70%)</button>
+  <button class="risk" onclick="risk(4,0.4)">x4 (40%)</button>
+  <button class="risk" onclick="risk(8,0.2)">x8 (20%)</button><br>
 
-  <button onclick="watchAdContinue()">📺 Continue</button><br>
+  <button class="cash" onclick="cashOut()">💰 Cash Out</button>
+  <br><br>
   <button onclick="restart()">Play Again</button>
 </div>
 
 <canvas id="game"></canvas>
 
 <script>
+/* =======================
+   PLAY.FUN INIT
+======================= */
 const PF = window.PlayFun || null;
 if (PF) PF.startGame();
 
+/* =======================
+   GAME STATE
+======================= */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
-let player = { x: canvas.width/2 - 20, y: canvas.height - 60, w:40, h:40 };
+let player = { x: canvas.width/2-20, y: canvas.height-60, w:40, h:40 };
 let blocks = [];
 let score = 0;
-let gameRunning = true;
-let speedMultiplier = 1;
+let running = true;
 
-document.addEventListener("mousemove", e => {
+let best = localStorage.getItem("best") || 0;
+document.getElementById("best").innerText = "Best: " + best;
+
+/* =======================
+   INPUT
+======================= */
+document.addEventListener("mousemove", e=>{
   player.x = e.clientX - player.w/2;
 });
+document.addEventListener("touchmove", e=>{
+  player.x = e.touches[0].clientX - player.w/2;
+});
 
-function spawnBlock(){
+/* =======================
+   GAME LOOP
+======================= */
+function spawn(){
   blocks.push({
-    x: Math.random() * (canvas.width - 30),
+    x: Math.random()*(canvas.width-30),
     y: -30,
-    w:30,
-    h:30,
-    speed: (3 + score/20) * speedMultiplier
+    w:30, h:30,
+    s: 3 + score*0.05
   });
 }
 
-function update(){
-  if(!gameRunning) return;
-
+function loop(){
+  if(!running) return;
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   ctx.fillStyle="lime";
-  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.fillRect(player.x,player.y,player.w,player.h);
 
   ctx.fillStyle="red";
   blocks.forEach((b,i)=>{
-    b.y += b.speed;
+    b.y += b.s;
     ctx.fillRect(b.x,b.y,b.w,b.h);
 
-    if(
-      b.x < player.x + player.w &&
-      b.x + b.w > player.x &&
-      b.y < player.y + player.h &&
-      b.y + b.h > player.y
-    ){
-      endGame();
+    // near miss
+    if(Math.abs((b.y+b.h)-player.y)<3){
+      score++;
     }
 
-    if(b.y > canvas.height){
+    if(
+      b.x<player.x+player.w &&
+      b.x+b.w>player.x &&
+      b.y<player.y+player.h &&
+      b.y+b.h>player.y
+    ) end();
+    
+    if(b.y>canvas.height){
       blocks.splice(i,1);
       score++;
-      document.getElementById("score").innerText="Score: "+score;
-      speedMultiplier = 1 + score * 0.03;
     }
   });
 
-  requestAnimationFrame(update);
+  document.getElementById("score").innerText="Score: "+score;
+  requestAnimationFrame(loop);
 }
 
-function endGame(){
-  gameRunning=false;
+setInterval(spawn,700);
+loop();
+
+/* =======================
+   GAME OVER
+======================= */
+function end(){
+  running=false;
+  if(score>best){
+    best=score;
+    localStorage.setItem("best",best);
+    document.getElementById("best").innerText="Best: "+best;
+  }
   document.getElementById("panel").style.display="block";
-  document.getElementById("finalScore").innerText="Your Score: "+score;
+  document.getElementById("final").innerText="Score: "+score;
+}
+
+/* =======================
+   MONETIZATION
+======================= */
+function watchAd(){
+  if(!PF) return restart();
+  PF.showRewardedAd(()=>{
+    blocks=[];
+    running=true;
+    document.getElementById("panel").style.display="none";
+    loop();
+  });
 }
 
 function cashOut(){
@@ -123,42 +187,22 @@ function cashOut(){
   restart();
 }
 
-function risk(multiplier, chance){
-  if(Math.random() < chance){
-    score *= multiplier;
-    alert("🔥 SUCCESS x"+multiplier);
-    if(PF){
-      PF.addPoints(score);
-      PF.endGame();
-    }
+function risk(m,c){
+  if(Math.random()<c){
+    score*=m;
+    cashOut();
   } else {
-    alert("💀 FAILED");
+    restart();
   }
-  restart();
-}
-
-function watchAdContinue(){
-  if(!PF) return;
-  PF.showRewardedAd(()=>{
-    gameRunning = true;
-    blocks = [];
-    document.getElementById("panel").style.display="none";
-    update();
-  });
 }
 
 function restart(){
-  blocks=[];
   score=0;
-  speedMultiplier=1;
-  gameRunning=true;
-  document.getElementById("score").innerText="Score: 0";
+  blocks=[];
+  running=true;
   document.getElementById("panel").style.display="none";
-  update();
+  loop();
 }
-
-setInterval(spawnBlock,800);
-update();
 </script>
 
 </body>
