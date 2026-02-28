@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569"/>
+<title>Dodge Arena — Heatmap Analytics</title>
+<script src="https://play.fun/sdk.js"></script>
+
+<style>
+body{margin:0;overflow:hidden;background:#050505;color:#fff;font-family:Arial}
+#ui{position:absolute;top:10px;left:10px}
+#score{font-size:20px}
+#daily{font-size:12px;color:#9b59b6}
+#debug{
+ position:absolute;bottom:10px;left:10px;
+ font-size:11px;opacity:.7
+}
+
+#panel{
+position:absolute;top:50%;left:50%;
+transform:translate(-50%,-50%);
+background:#111;padding:22px;
+border-radius:14px;text-align:center;
+display:none
+}
+
+button{padding:14px 26px;margin:6px;border:none;border-radius:10px;font-size:16px;cursor:pointer}
+.cont{background:#2ecc71;color:#000}
+.cash{background:#3498db}
+.small{font-size:13px;opacity:.7}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+ <div id="score">Score: 0</div>
+ <div id="daily"></div>
+</div>
+
+<div id="debug"></div>
+
+<div id="panel">
+ <h2>YOU DIED 💀</h2>
+ <p id="final"></p>
+
+ <button class="cont" onclick="continueAd()">📺 SAVE RUN</button><br>
+ <button class="cash" onclick="cashOut()">💰 CASH OUT</button><br>
+ <button class="small" onclick="restart()">PLAY AGAIN</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+/* ===== PLAY.FUN ===== */
+const PF = window.PlayFun || null;
+if(PF) PF.startGame();
+
+/* ===== ANALYTICS ===== */
+const stats = JSON.parse(localStorage.getItem("stats") || "{}");
+stats.sessions = (stats.sessions||0)+1;
+stats.deaths ||= 0;
+stats.ads ||= 0;
+stats.saves ||= 0;
+stats.totalScore ||= 0;
+stats.heat ||= [];
+
+function saveStats(){
+ localStorage.setItem("stats",JSON.stringify(stats));
+}
+
+/* ===== CORE ===== */
+const c=document.getElementById("game"),ctx=c.getContext("2d");
+c.width=innerWidth;c.height=innerHeight;
+
+let p={x:c.width/2-20,y:c.height-60,w:40,h:40};
+let enemies=[],score=0,running=true;
+let best=localStorage.getItem("best")||0;
+let saveUsed=false;
+
+/* ===== DAILY ===== */
+let today=new Date().toDateString();
+let last=localStorage.getItem("day");
+let hard=false;
+if(today!==last){
+ localStorage.setItem("day",today);
+ hard=Math.random()<0.5;
+ localStorage.setItem("hard",hard);
+}
+hard=localStorage.getItem("hard")==="true";
+document.getElementById("daily").innerText=
+ hard?"⚠️ DAILY HARD":"✨ DAILY NORMAL";
+
+/* ===== INPUT ===== */
+document.addEventListener("mousemove",e=>p.x=e.clientX-p.w/2);
+document.addEventListener("touchmove",e=>p.x=e.touches[0].clientX-p.w/2);
+
+/* ===== SPAWN ===== */
+function spawn(){
+ enemies.push({
+  x:Math.random()*(c.width-30),
+  y:-30,
+  r:15,
+  s:3+score*0.05
+ });
+}
+
+/* ===== HEATMAP DRAW ===== */
+function drawHeatmap(){
+ stats.heat.forEach(h=>{
+  ctx.fillStyle=`rgba(255,0,0,${Math.min(h.c/10,0.4)})`;
+  ctx.beginPath();
+  ctx.arc(h.x,h.y,30,0,Math.PI*2);
+  ctx.fill();
+ });
+}
+
+/* ===== LOOP ===== */
+function loop(){
+ if(!running)return;
+ ctx.clearRect(0,0,c.width,c.height);
+
+ drawHeatmap(); // 👈 HEATMAP OVERLAY
+
+ ctx.fillStyle="lime";
+ ctx.fillRect(p.x,p.y,p.w,p.h);
+
+ enemies.forEach((e,i)=>{
+  e.y+=e.s;
+  ctx.strokeStyle="red";
+  ctx.beginPath();
+  ctx.arc(e.x+e.r,e.y+e.r,e.r,0,Math.PI*2);
+  ctx.stroke();
+
+  if(
+   e.x<p.x+p.w && e.x+e.r*2>p.x &&
+   e.y<p.y+p.h && e.y+e.r*2>p.y
+  ) end();
+
+  if(e.y>c.height){
+   enemies.splice(i,1);
+   score++;
+  }
+ });
+
+ document.getElementById("score").innerText="Score: "+score;
+ document.getElementById("debug").innerText=
+`Sessions: ${stats.sessions}
+Deaths: ${stats.deaths}
+Ads: ${stats.ads}
+SaveRuns: ${stats.saves}
+Heat points: ${stats.heat.length}`;
+
+ requestAnimationFrame(loop);
+}
+
+setInterval(spawn,700);
+loop();
+
+/* ===== END ===== */
+function end(){
+ running=false;
+
+ // 🔥 SAVE HEAT POINT
+ const hx=Math.round(p.x+p.w/2);
+ const hy=Math.round(p.y+p.h/2);
+ let point=stats.heat.find(h=>Math.abs(h.x-hx)<20 && Math.abs(h.y-hy)<20);
+ if(point) point.c++;
+ else stats.heat.push({x:hx,y:hy,c:1});
+
+ stats.deaths++;
+ stats.totalScore+=score;
+ saveStats();
+
+ if(score>best){best=score;localStorage.setItem("best",best);}
+ document.getElementById("final").innerText=
+ `Score ${score} | Best ${best}`;
+ document.getElementById("panel").style.display="block";
+}
+
+/* ===== MONEY ===== */
+function continueAd(){
+ if(saveUsed)return restart();
+ saveUsed=true;
+ stats.ads++; stats.saves++; saveStats();
+
+ if(!PF)return restart();
+ PF.showRewardedAd(()=>{
+  enemies=[];
+  running=true;
+  document.getElementById("panel").style.display="none";
+  loop();
+ });
+}
+
+function cashOut(){
+ if(PF){PF.addPoints(score);PF.endGame();}
+ restart();
+}
+
+function restart(){
+ score=0;enemies=[];
+ saveUsed=false;
+ running=true;
+ document.getElementById("panel").style.display="none";
+ loop();
+}
+</script>
+
+</body>
+</html>
