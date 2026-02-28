@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ORB Arena</title>
+
+<meta name="x-ogp-key"
+      content="9063cd14-6bfe-4820-964a-0194b9ac0569"
+      id="ogp-key-meta" />
+
+<script src="https://sdk.play.fun/opus.js"></script>
+
+<style>
+html,body{
+  margin:0;
+  background:#0b0f14;
+  color:#fff;
+  font-family:system-ui;
+  overflow:hidden
+}
+#ui{
+  position:fixed;
+  top:10px;
+  left:10px;
+  z-index:10
+}
+button{
+  background:#222;
+  color:#fff;
+  border:1px solid #444;
+  padding:6px 10px;
+  border-radius:8px;
+  cursor:pointer;
+  margin:2px
+}
+button.active{
+  background:#4cffc4;
+  color:#000
+}
+#overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.85);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:20
+}
+#panel{
+  background:#111;
+  padding:20px;
+  border-radius:12px;
+  text-align:center
+}
+canvas{display:block}
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <button id="bActive" class="active">ACTIVE</button>
+  <button id="bVibe">VIBE</button>
+  <button id="bAfk">AFK</button>
+  <div id="score">score: 0</div>
+</div>
+
+<div id="overlay">
+  <div id="panel">
+    <h2>ORB fainted 😵</h2>
+    <button id="save">💰 Save Run</button><br><br>
+    <button id="restart">Restart</button>
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+/* ================= PLAY.FUN SDK ================= */
+let playfun = null;
+window.addEventListener("load", () => {
+  if (window.Opus) {
+    playfun = new Opus({ widgets:{ points:true } });
+  }
+});
+
+/* ================= BASIC ================= */
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const scoreEl = document.getElementById("score"); // ✅ FIX
+
+function resize(){
+  c.width = innerWidth;
+  c.height = innerHeight;
+}
+resize();
+window.onresize = resize;
+
+/* ================= STATE ================= */
+let mode="active", slow=1;
+let score=0, dead=false;
+let enemies=[], spawnT=0;
+let boss=null, laser=null;
+let heatmap=[];
+let pointsBuffer=0;
+
+/* ================= ORB ================= */
+const orb={ x:c.width/2, y:c.height/2, r:18, t:0 };
+
+/* ================= UI ================= */
+bActive.onclick=()=>setMode("active");
+bVibe.onclick=()=>setMode("vibe");
+bAfk.onclick=()=>setMode("afk");
+
+function setMode(m){
+  mode=m;
+  slow = m==="active"?1 : m==="vibe"?0.2 : 0.15;
+  bActive.classList.toggle("active",m==="active");
+  bVibe.classList.toggle("active",m==="vibe");
+  bAfk.classList.toggle("active",m==="afk");
+}
+
+onmousemove=e=>{
+  if(mode==="active"){
+    orb.x=e.clientX;
+    orb.y=e.clientY;
+  }
+};
+
+/* ================= LOOP ================= */
+function loop(){
+  requestAnimationFrame(loop);
+  if(dead) return;
+
+  ctx.clearRect(0,0,c.width,c.height);
+  orb.t++;
+
+  // SCORE
+  let gain = mode==="active"?0.05:0.02;
+  score += gain;
+  score |= 0;
+  scoreEl.innerText = "score: " + score;
+
+  // SDK points (buffered)
+  pointsBuffer += gain;
+  if(pointsBuffer >= 10){
+    if(playfun) playfun.addPoints(10);
+    pointsBuffer = 0;
+  }
+
+  // HEATMAP
+  heatmap.forEach(p=>{
+    ctx.fillStyle="rgba(255,0,0,0.08)";
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,40,0,6.28);
+    ctx.fill();
+  });
+
+  // SPAWN
+  spawnT++;
+  if(spawnT>40){
+    spawnT=0;
+    enemies.push({
+      x:Math.random()*c.width,
+      y:-20,
+      r:14,
+      s:2+Math.random()*2
+    });
+  }
+
+  // LASER BOSS
+  if(mode==="active" && score>80 && !boss){
+    boss={y:-80,t:0};
+  }
+  if(boss){
+    boss.t++;
+    boss.y=Math.min(40,boss.y+1);
+    ctx.fillStyle="#600";
+    ctx.fillRect(0,boss.y,c.width,40);
+
+    if(boss.t%120===0){
+      laser={x:Math.random()*c.width,t:0};
+    }
+  }
+
+  if(laser){
+    laser.t++;
+    if(laser.t<60){
+      ctx.strokeStyle="rgba(255,0,0,0.4)";
+      ctx.beginPath();
+      ctx.moveTo(laser.x,0);
+      ctx.lineTo(laser.x,c.height);
+      ctx.stroke();
+    }else{
+      ctx.strokeStyle="red";
+      ctx.lineWidth=4;
+      ctx.beginPath();
+      ctx.moveTo(laser.x,0);
+      ctx.lineTo(laser.x,c.height);
+      ctx.stroke();
+      ctx.lineWidth=1;
+      if(Math.abs(orb.x-laser.x)<orb.r+4) die();
+    }
+    if(laser.t>120) laser=null;
+  }
+
+  // ENEMIES
+  enemies.forEach(e=>{
+    e.y+=e.s*slow;
+    ctx.strokeStyle="#f55";
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,e.r,0,6.28);
+    ctx.stroke();
+    if(Math.hypot(e.x-orb.x,e.y-orb.y)<e.r+orb.r) die();
+  });
+  enemies=enemies.filter(e=>e.y<c.height+50);
+
+  // AFK MOVE
+  if(mode!=="active"){
+    orb.x+=Math.sin(orb.t*0.01)*0.8;
+    orb.y+=Math.cos(orb.t*0.013)*0.8;
+  }
+
+  // DRAW ORB
+  ctx.beginPath();
+  ctx.arc(orb.x,orb.y,orb.r,0,6.28);
+  ctx.fillStyle="#7cffc4";
+  ctx.fill();
+
+  ctx.fillStyle="#000";
+  ctx.beginPath();
+  ctx.arc(orb.x-5,orb.y-3,2,0,6.28);
+  ctx.arc(orb.x+5,orb.y-3,2,0,6.28);
+  ctx.fill();
+}
+loop();
+
+/* ================= DEATH ================= */
+function die(){
+  dead=true;
+  heatmap.push({x:orb.x,y:orb.y});
+  overlay.style.display="flex";
+  if(playfun) playfun.endGame();
+}
+
+/* ================= BUTTONS ================= */
+save.onclick=()=>{
+  dead=false;
+  enemies=[];
+  overlay.style.display="none";
+};
+
+restart.onclick=()=>{
+  dead=false;
+  score=0;
+  enemies=[];
+  boss=null;
+  laser=null;
+  overlay.style.display="none";
+};
+</script>
+</body>
+</html>
