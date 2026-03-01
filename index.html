@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Moody Idle 3D — Vibe Engine</title>
+
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569">
+<script src="https://sdk.play.fun/opus.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
+<style>
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  background:#0b0d13;
+  overflow:hidden;
+  font-family:system-ui;
+  color:#fff;
+}
+#ui{
+  position:absolute;
+  top:12px;
+  left:12px;
+  z-index:10;
+}
+#ui div{margin-bottom:6px}
+button{
+  background:#ffb703;
+  border:none;
+  padding:6px 12px;
+  border-radius:10px;
+  font-weight:800;
+  cursor:pointer;
+}
+#fallback{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:20px;
+  opacity:.6;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div id="pts">pts: 0</div>
+  <div id="mood">🙂 calm</div>
+  <div id="mode">☀️ day</div>
+  <button onclick="boost()">BOOST</button>
+</div>
+
+<div id="fallback" style="display:none;">Loading Moody…</div>
+
+<script>
+/* PLAY.FUN */
+let pf=null;
+window.addEventListener("load",()=>{
+  if(window.Opus){
+    pf=new Opus({widgets:{points:true}});
+  }
+});
+
+/* THREE SAFE INIT */
+let scene,camera,renderer,orb;
+let webglOK=true;
+
+try{
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0b0d13);
+
+  camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,100);
+  camera.position.z=4;
+
+  renderer=new THREE.WebGLRenderer({
+    antialias:true,
+    alpha:false,
+    powerPreference:"high-performance"
+  });
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  document.body.appendChild(renderer.domElement);
+}catch(e){
+  webglOK=false;
+  document.getElementById("fallback").style.display="flex";
+}
+
+/* LIGHTS */
+if(webglOK){
+  scene.add(new THREE.AmbientLight(0xffffff,0.8));
+  const p=new THREE.PointLight(0xffffff,1.5);
+  p.position.set(2,3,4);
+  scene.add(p);
+
+  /* ORB */
+  const geo=new THREE.SphereGeometry(1,64,64);
+  const mat=new THREE.MeshStandardMaterial({
+    color:0x6ef3c5,
+    roughness:0.3,
+    metalness:0.1,
+    emissive:0x000000
+  });
+  orb=new THREE.Mesh(geo,mat);
+  scene.add(orb);
+}
+
+/* UI */
+const ptsEl=document.getElementById("pts");
+const moodEl=document.getElementById("mood");
+const modeEl=document.getElementById("mode");
+
+/* STATE */
+let score=0, buffer=0, t=0;
+let boostT=0;
+let night=false;
+
+/* MOODS */
+const moods=[
+ {n:"calm",e:"🙂",c:0x6ef3c5,m:1},
+ {n:"sleepy",e:"😴",c:0x8ecae6,m:1},
+ {n:"happy",e:"😄",c:0xffe066,m:1.3},
+ {n:"GOLDEN",e:"✨",c:0xffd700,m:5}
+];
+let mood=moods[0];
+
+function boost(){
+  boostT=600;
+  if(orb) orb.material.emissive.setHex(0xffaa00);
+}
+
+/* RESIZE */
+window.onresize=()=>{
+  if(!webglOK) return;
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+};
+
+/* LOOP */
+function loop(){
+  requestAnimationFrame(loop);
+  t++;
+
+  if(t%3600===0){
+    night=!night;
+    modeEl.innerText=night?"🌙 night":"☀️ day";
+    if(scene) scene.background.setHex(night?0x02030a:0x0b0d13);
+  }
+
+  if(t%900===0){
+    mood=Math.random()<0.01?moods[3]:moods[Math.floor(Math.random()*3)];
+    moodEl.innerText=mood.e+" "+mood.n;
+    if(orb) orb.material.color.setHex(mood.c);
+  }
+
+  let earn=0.05*mood.m*(night?1.5:1)*(boostT>0?2:1);
+  if(boostT>0){
+    boostT--;
+    if(boostT===0 && orb) orb.material.emissive.setHex(0x000000);
+  }
+
+  score+=earn;
+  score|=0;
+  ptsEl.innerText="pts: "+score;
+
+  buffer+=earn;
+  if(buffer>=10){
+    if(pf) pf.addPoints(10);
+    buffer=0;
+  }
+
+  if(orb){
+    orb.rotation.y+=0.004;
+    orb.scale.setScalar(1+Math.sin(t*0.05)*0.05);
+    renderer.render(scene,camera);
+  }
+}
+loop();
+</script>
+</body>
+</html>
