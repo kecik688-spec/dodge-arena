@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Moody Pet: Ascension</title>
+
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569">
+<script src="https://sdk.play.fun/opus.js"></script>
+
+<style>
+html,body{
+ margin:0;
+ overflow:hidden;
+ background:#0b0c18;
+ font-family:system-ui;
+ color:white;
+}
+#ui{
+ position:fixed;
+ top:15px;
+ left:15px;
+ z-index:10;
+}
+button{
+ background:#ffcc00;
+ border:none;
+ padding:8px 14px;
+ border-radius:12px;
+ font-weight:bold;
+ cursor:pointer;
+}
+canvas{display:block;}
+#cosmicText{
+ position:fixed;
+ top:50%;
+ left:50%;
+ transform:translate(-50%,-50%);
+ font-size:48px;
+ font-weight:bold;
+ opacity:0;
+ pointer-events:none;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+ <div id="pts">pts: 0</div>
+ <div id="stage">Stage: 1</div>
+ <button onclick="boost()">BOOST</button>
+</div>
+
+<div id="cosmicText">ASCENSION</div>
+<canvas id="c"></canvas>
+
+<script>
+let pf=null;
+window.onload=()=>{
+ if(window.Opus) pf=new Opus({widgets:{points:true}});
+};
+
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
+function resize(){c.width=innerWidth;c.height=innerHeight}
+resize();onresize=resize;
+
+let score=0, buffer=0;
+let stage=1;
+let boostT=0;
+let t=0;
+let stars=[];
+let rings=0;
+let ascended=false;
+
+function getStage(){
+ if(score>=50000) return 5;
+ if(score>=15000) return 4;
+ if(score>=3000) return 3;
+ if(score>=500) return 2;
+ return 1;
+}
+
+function boost(){ boostT=600; }
+
+for(let i=0;i<200;i++){
+ stars.push({
+  x:Math.random()*innerWidth,
+  y:Math.random()*innerHeight,
+  size:Math.random()*2
+ });
+}
+
+function loop(){
+ requestAnimationFrame(loop);
+ t++;
+ ctx.clearRect(0,0,c.width,c.height);
+
+ stage=getStage();
+ document.getElementById("stage").innerText="Stage: "+stage;
+
+ let earn=0.05*stage;
+ if(stage==5) earn*=10;
+ if(boostT>0){earn*=2;boostT--;}
+
+ score+=earn;
+ buffer+=earn;
+
+ if(buffer>=10){
+   if(pf) pf.addPoints(10);
+   buffer=0;
+ }
+
+ document.getElementById("pts").innerText="pts: "+Math.floor(score);
+
+ let x=c.width/2;
+ let y=c.height/2;
+ let r=60+stage*20+Math.sin(t*0.05)*5;
+
+ if(stage==5 && !ascended){
+   ascended=true;
+   document.getElementById("cosmicText").style.opacity=1;
+   setTimeout(()=>document.getElementById("cosmicText").style.opacity=0,2000);
+ }
+
+ // Starfield
+ if(stage>=4){
+   stars.forEach(s=>{
+     ctx.fillStyle="white";
+     ctx.fillRect(s.x,s.y,s.size,s.size);
+     s.y+=0.5+stage*0.3;
+     if(s.y>c.height) s.y=0;
+   });
+ }
+
+ // Rings
+ if(stage==5){
+   rings+=0.02;
+   ctx.beginPath();
+   ctx.arc(x,y,r+40+Math.sin(rings)*20,0,Math.PI*2);
+   ctx.strokeStyle="rgba(0,255,255,0.6)";
+   ctx.lineWidth=4;
+   ctx.stroke();
+ }
+
+ // Main body
+ ctx.beginPath();
+ ctx.arc(x,y,r,0,Math.PI*2);
+
+ ctx.fillStyle=[
+   "#ffd166",
+   "#06d6a0",
+   "#00b4d8",
+   "#7209b7",
+   "#ffffff"
+ ][stage-1];
+
+ ctx.fill();
+
+ // glowing eyes in final
+ ctx.fillStyle= stage==5 ? "#00ffff" : "#000";
+ ctx.beginPath();
+ ctx.arc(x-r/3,y-r/5,12+stage,0,Math.PI*2);
+ ctx.arc(x+r/3,y-r/5,12+stage,0,Math.PI*2);
+ ctx.fill();
+
+ // mouth
+ ctx.strokeStyle="#000";
+ ctx.lineWidth=4;
+ ctx.beginPath();
+ ctx.arc(x,y+r/4,30+stage*5,0,Math.PI);
+ ctx.stroke();
+ ctx.lineWidth=1;
+
+}
+loop();
+</script>
+</body>
+</html>
