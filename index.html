@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AIXEL: Cinematic Earth Collapse</title>
+
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569">
+<script src="https://sdk.play.fun/opus.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+body{margin:0;overflow:hidden;background:black;}
+#ui{
+ position:fixed;
+ top:15px;
+ left:15px;
+ color:white;
+ font-family:system-ui;
+ z-index:10;
+}
+button{
+ background:#00eaff;
+ border:none;
+ padding:8px 14px;
+ border-radius:10px;
+ font-weight:bold;
+ cursor:pointer;
+}
+#speech{
+ position:fixed;
+ bottom:30px;
+ width:100%;
+ text-align:center;
+ color:white;
+ font-size:22px;
+ opacity:0;
+ transition:.3s;
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+ <div id="pts">pts: 0</div>
+ <div id="stage">Stage: 1</div>
+ <button onclick="boost()">BOOST</button>
+</div>
+
+<div id="speech"></div>
+
+<script>
+let pf=null;
+window.onload=()=>{
+ if(window.Opus){
+   pf=new Opus({widgets:{points:true}});
+ }
+};
+
+let playerName=localStorage.getItem("aixel_name");
+if(!playerName){
+ playerName=prompt("Enter your name:");
+ if(!playerName) playerName="Human";
+ localStorage.setItem("aixel_name",playerName);
+}
+
+function speak(text){
+ const el=document.getElementById("speech");
+ el.innerText=text;
+ el.style.opacity=1;
+ setTimeout(()=>el.style.opacity=0,3000);
+}
+
+// SOUND
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playHum(){
+ const osc = audioCtx.createOscillator();
+ const gain = audioCtx.createGain();
+ osc.type="sawtooth";
+ osc.frequency.value=50;
+ gain.gain.value=0.05;
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+ osc.start();
+ osc.stop(audioCtx.currentTime+1.5);
+}
+
+function playBoom(){
+ const osc = audioCtx.createOscillator();
+ const gain = audioCtx.createGain();
+ osc.type="square";
+ osc.frequency.setValueAtTime(200,audioCtx.currentTime);
+ osc.frequency.exponentialRampToValueAtTime(20,audioCtx.currentTime+0.5);
+ gain.gain.value=0.3;
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+ osc.start();
+ osc.stop(audioCtx.currentTime+0.6);
+}
+
+// THREE
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener("resize",()=>{
+ renderer.setSize(innerWidth,innerHeight);
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+});
+
+camera.position.z=12;
+
+const light=new THREE.PointLight(0xffffff,1.5);
+light.position.set(10,10,10);
+scene.add(light);
+
+// STARS
+const starGeo=new THREE.BufferGeometry();
+let starVerts=[];
+for(let i=0;i<2000;i++){
+ starVerts.push(
+  (Math.random()-0.5)*400,
+  (Math.random()-0.5)*400,
+  (Math.random()-0.5)*400
+ );
+}
+starGeo.setAttribute("position", new THREE.Float32BufferAttribute(starVerts,3));
+const starMat=new THREE.PointsMaterial({color:0xffffff});
+const stars=new THREE.Points(starGeo,starMat);
+scene.add(stars);
+
+// EARTH
+const earth=new THREE.Mesh(
+ new THREE.SphereGeometry(3,64,64),
+ new THREE.MeshStandardMaterial({color:0x1e90ff,flatShading:true})
+);
+scene.add(earth);
+
+// ATMOSPHERE
+const atmosphere=new THREE.Mesh(
+ new THREE.SphereGeometry(3.3,64,64),
+ new THREE.MeshBasicMaterial({color:0x00eaff,transparent:true,opacity:0.2})
+);
+scene.add(atmosphere);
+
+// AIXEL
+const aixel=new THREE.Mesh(
+ new THREE.SphereGeometry(1.2,32,32),
+ new THREE.MeshStandardMaterial({color:0x111111,emissive:0x00eaff})
+);
+aixel.position.y=6;
+scene.add(aixel);
+
+// GAME
+let score=0,buffer=0,stage=1,boostT=0;
+let breach=false,breachTimer=0;
+let pieces=[];
+let timeScale=1;
+
+function getStage(){
+ if(score>=50000) return 5;
+ if(score>=15000) return 4;
+ if(score>=3000) return 3;
+ if(score>=500) return 2;
+ return 1;
+}
+
+function boost(){
+ boostT=600;
+ speak("Energy surge, "+playerName);
+}
+
+document.addEventListener("click",()=>{
+ score+=5*stage;
+ if(stage>=5 && Math.random()<0.02){
+   triggerBreach();
+ }
+});
+
+function triggerBreach(){
+ breach=true;
+ breachTimer=180;
+ timeScale=0.2;
+ playHum();
+ speak("SYSTEM BREACH — "+playerName);
+
+ for(let i=0;i<40;i++){
+   const p=new THREE.Mesh(
+     new THREE.BoxGeometry(0.5,0.5,0.5),
+     new THREE.MeshStandardMaterial({color:0xff0000})
+   );
+   p.position.copy(earth.position);
+   p.userData.vel=new THREE.Vector3(
+     (Math.random()-0.5)*0.6,
+     (Math.random()-0.5)*0.6,
+     (Math.random()-0.5)*0.6
+   );
+   scene.add(p);
+   pieces.push(p);
+ }
+
+ earth.visible=false;
+ atmosphere.visible=false;
+
+ setTimeout(()=>{
+   playBoom();
+   timeScale=1;
+ },800);
+}
+
+function animate(){
+ requestAnimationFrame(animate);
+
+ stage=getStage();
+
+ let earn=0.05*stage;
+ if(stage>=5) earn*=20;
+ if(boostT>0){ earn*=2; boostT--; }
+
+ score+=earn;
+ buffer+=earn;
+
+ if(buffer>=10){
+  if(pf && pf.addPoints) pf.addPoints(10);
+  buffer=0;
+ }
+
+ document.getElementById("pts").innerText="pts: "+Math.floor(score);
+ document.getElementById("stage").innerText="Stage: "+stage;
+
+ // ROTATION
+ earth.rotation.y+=0.003*stage*timeScale;
+ atmosphere.rotation.y+=0.004*stage*timeScale;
+ stars.rotation.y+=0.0005*timeScale;
+
+ aixel.position.y=6+Math.sin(Date.now()*0.002)*0.5;
+ aixel.rotation.y+=0.02*timeScale;
+
+ if(breach){
+   camera.position.z=10+Math.random()*0.5;
+   camera.position.x=(Math.random()-0.5)*0.3;
+   camera.position.y=(Math.random()-0.5)*0.3;
+
+   pieces.forEach(p=>{
+     p.position.add(p.userData.vel.clone().multiplyScalar(timeScale));
+   });
+
+   breachTimer--;
+   if(breachTimer<=0){
+     breach=false;
+     earth.visible=true;
+     atmosphere.visible=true;
+     pieces.forEach(p=>scene.remove(p));
+     pieces=[];
+     camera.position.set(0,0,12);
+   }
+ }
+
+ renderer.render(scene,camera);
+}
+
+animate();
+</script>
+</body>
+</html>
