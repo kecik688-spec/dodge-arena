@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AIXEL: Self-Evolving Entity</title>
+
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569">
+<script src="https://sdk.play.fun/opus.js"></script>
+
+<style>
+html,body{
+ margin:0;
+ overflow:hidden;
+ background:black;
+ font-family:system-ui;
+ color:white;
+}
+#ui{
+ position:fixed;
+ top:15px;
+ left:15px;
+ z-index:10;
+}
+button{
+ background:#00eaff;
+ border:none;
+ padding:8px 14px;
+ border-radius:12px;
+ font-weight:bold;
+ cursor:pointer;
+}
+canvas{display:block;}
+</style>
+</head>
+<body>
+
+<div id="ui">
+ <div id="pts">pts: 0</div>
+ <div id="stage">Stage: 1</div>
+ <button onclick="boost()">BOOST</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+let pf=null;
+window.onload=()=>{
+ if(window.Opus){
+   pf=new Opus({widgets:{points:true}});
+ }
+};
+
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
+
+function resize(){
+ c.width=innerWidth;
+ c.height=innerHeight;
+}
+resize();
+onresize=resize;
+
+let score=0, buffer=0;
+let stage=1;
+let boostT=0;
+let t=0;
+
+let x=c.width/2;
+let y=c.height/2;
+let floatOffset=0;
+
+let mouseX=x, mouseY=y;
+
+document.onmousemove=e=>{
+ mouseX=e.clientX;
+ mouseY=e.clientY;
+};
+
+function getStage(){
+ if(score>=50000) return 5;
+ if(score>=15000) return 4;
+ if(score>=3000) return 3;
+ if(score>=500) return 2;
+ return 1;
+}
+
+function boost(){
+ boostT=600;
+}
+
+document.onclick=()=>{
+ score+=5*stage;
+};
+
+function loop(){
+ requestAnimationFrame(loop);
+ t++;
+
+ stage=getStage();
+
+ let earn=0.05*stage;
+ if(stage>=5) earn*=15;
+ if(boostT>0){ earn*=2; boostT--; }
+
+ score+=earn;
+ buffer+=earn;
+
+ if(buffer>=10){
+   if(pf && pf.addPoints){
+     pf.addPoints(10);
+   }
+   buffer=0;
+ }
+
+ document.getElementById("pts").innerText="pts: "+Math.floor(score);
+ document.getElementById("stage").innerText="Stage: "+stage;
+
+ // Background glow
+ ctx.fillStyle = stage>=5
+   ? `hsl(${t%360},100%,5%)`
+   : "black";
+ ctx.fillRect(0,0,c.width,c.height);
+
+ floatOffset = Math.sin(t*0.05)*20;
+
+ let coreSize = 70 + stage*10;
+
+ // CORE
+ ctx.beginPath();
+ ctx.arc(x,y+floatOffset,coreSize,0,Math.PI*2);
+ ctx.fillStyle="#111";
+ ctx.shadowBlur=30;
+ ctx.shadowColor="#00eaff";
+ ctx.fill();
+ ctx.shadowBlur=0;
+
+ // ROTATING SEGMENTS
+ for(let i=0;i<4+stage;i++){
+   let angle = t*0.01 + i*(Math.PI*2/(4+stage));
+   let dist = coreSize+30;
+   let sx = x + Math.cos(angle)*dist;
+   let sy = y + floatOffset + Math.sin(angle)*dist;
+
+   ctx.beginPath();
+   ctx.arc(sx,sy,10+stage*2,0,Math.PI*2);
+   ctx.fillStyle="#00eaff";
+   ctx.fill();
+ }
+
+ // EYES FOLLOW CURSOR
+ let dx=(mouseX-x)*0.02;
+ let dy=(mouseY-y)*0.02;
+
+ ctx.fillStyle="#00eaff";
+ ctx.beginPath();
+ ctx.arc(x-25+dx,y-15+floatOffset+dy,12,0,Math.PI*2);
+ ctx.arc(x+25+dx,y-15+floatOffset+dy,12,0,Math.PI*2);
+ ctx.fill();
+
+ // GLITCH EFFECT STAGE 5
+ if(stage>=5){
+   if(Math.random()<0.05){
+     ctx.fillStyle="white";
+     ctx.fillRect(Math.random()*c.width,Math.random()*c.height,3,3);
+   }
+   if(Math.random()<0.02){
+     x = c.width/2 + (Math.random()-0.5)*200;
+   }
+ }
+
+}
+loop();
+</script>
+</body>
+</html>
