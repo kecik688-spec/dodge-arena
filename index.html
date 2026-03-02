@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Moody Pet: REAL Chaos</title>
+
+<meta name="x-ogp-key" content="9063cd14-6bfe-4820-964a-0194b9ac0569">
+<script src="https://sdk.play.fun/opus.js"></script>
+
+<style>
+html,body{
+ margin:0;
+ overflow:hidden;
+ background:black;
+ font-family:system-ui;
+ color:white;
+}
+#ui{
+ position:fixed;
+ top:15px;
+ left:15px;
+ z-index:10;
+}
+button{
+ background:#ffcc00;
+ border:none;
+ padding:8px 14px;
+ border-radius:12px;
+ font-weight:bold;
+ cursor:pointer;
+ margin-right:5px;
+}
+canvas{display:block;}
+</style>
+</head>
+<body>
+
+<div id="ui">
+ <div id="pts">pts: 0</div>
+ <div id="stage">Stage: 1</div>
+ <button onclick="boost()">BOOST</button>
+ <button onclick="forceStage6()">STAGE 6</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+let pf=null;
+window.onload=()=>{
+ if(window.Opus){
+   pf=new Opus({widgets:{points:true}});
+ }
+};
+
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
+
+function resize(){
+ c.width=window.innerWidth;
+ c.height=window.innerHeight;
+}
+resize();
+window.addEventListener("resize",resize);
+
+let score=0;
+let buffer=0;
+let stage=1;
+let boostT=0;
+let t=0;
+
+let x=c.width/2;
+let y=c.height/2;
+let vx=4;
+let vy=3;
+
+let forbidden=false;
+
+function getStage(){
+ if(score>=50000) return 5;
+ if(score>=15000) return 4;
+ if(score>=3000) return 3;
+ if(score>=500) return 2;
+ return 1;
+}
+
+function boost(){ boostT=600; }
+
+function forceStage6(){
+ forbidden=true;
+}
+
+document.addEventListener("click",()=>{
+ score+=5*stage;
+});
+
+function loop(){
+ requestAnimationFrame(loop);
+ t++;
+
+ if(!forbidden){
+   stage=getStage();
+ }
+
+ let earn=0.05*stage;
+ if(stage>=5) earn*=10;
+ if(forbidden) earn*=30;
+
+ if(boostT>0){
+   earn*=2;
+   boostT--;
+ }
+
+ score+=earn;
+ buffer+=earn;
+
+ if(buffer>=10){
+   if(pf && pf.addPoints){
+     pf.addPoints(10);
+   }
+   buffer=0;
+ }
+
+ document.getElementById("pts").innerText="pts: "+Math.floor(score);
+ document.getElementById("stage").innerText=
+   forbidden ? "Stage 6 — FORBIDDEN" : "Stage: "+stage;
+
+ // CHAOTIC BACKGROUND
+ if(forbidden){
+   ctx.fillStyle=`hsl(${t%360},100%,10%)`;
+ } else if(stage>=5){
+   ctx.fillStyle=`hsl(${(t*2)%360},100%,6%)`;
+ } else {
+   ctx.fillStyle="#000";
+ }
+ ctx.fillRect(0,0,c.width,c.height);
+
+ // SPEED INCREASE PER STAGE
+ let speedMultiplier=1+stage*0.5;
+ if(forbidden) speedMultiplier=6;
+
+ x+=vx*speedMultiplier;
+ y+=vy*speedMultiplier;
+
+ if(x<100||x>c.width-100) vx*=-1;
+ if(y<100||y>c.height-100) vy*=-1;
+
+ let r=60+stage*15+Math.sin(t*0.2)*15;
+
+ // BODY
+ ctx.beginPath();
+ ctx.arc(x,y,r,0,Math.PI*2);
+
+ if(forbidden){
+   ctx.fillStyle="black";
+   ctx.shadowBlur=80;
+   ctx.shadowColor="red";
+ } else {
+   ctx.fillStyle=["#ffd166","#06d6a0","#00b4d8","#7209b7","#ffffff"][stage-1];
+   ctx.shadowBlur=stage>=5?50:0;
+   ctx.shadowColor="cyan";
+ }
+
+ ctx.fill();
+ ctx.shadowBlur=0;
+
+ // EYES
+ ctx.fillStyle=forbidden?"red":"black";
+ ctx.beginPath();
+ ctx.arc(x-r/3,y-r/5,20,0,Math.PI*2);
+ ctx.arc(x+r/3,y-r/5,20,0,Math.PI*2);
+ ctx.fill();
+
+ // MOUTH
+ ctx.strokeStyle=forbidden?"red":"black";
+ ctx.lineWidth=6;
+ ctx.beginPath();
+ ctx.arc(x,y+r/4,40,0,Math.PI);
+ ctx.stroke();
+ ctx.lineWidth=1;
+
+ // RANDOM TELEPORT CHAOS
+ if(stage>=5 && Math.random()<0.01){
+   x=Math.random()*c.width;
+   y=Math.random()*c.height;
+ }
+
+}
+loop();
+</script>
+</body>
+</html>
